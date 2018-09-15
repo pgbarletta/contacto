@@ -9,8 +9,6 @@ in_frm = read(in_trj)
 in_top = Topology(in_frm)
 coords = positions(in_frm)
 
-as = contacto.Voxel()
-
 
 t_xyz = transpose(coords)
 x_min = minimum(t_xyz[:, 1])
