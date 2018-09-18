@@ -32,6 +32,15 @@ function Voxel(c::Array{Float64, 1}, hd::Float64, level::Int64)
     Voxel(c, vertices, hd, level, Voxel(), MVector{8, Voxel}(fill(Voxel(), 8)))
 end
 
+mutable struct Cell
+    atoms::MVector{8, Int64}
+    vertices::MMatrix{3, 8, Float64}
+    siblings::MVector{8, Cell}
+    
+
+    Cell() = new()
+    Cell(atoms, vertices, siblings) = new(atoms, vertices, siblings)
+end
 
 # tmp_xyz = Array{Float64}(undef, natoms, 3)
 # tmp_xyz[:, 1] = t_xyz[:, 1] .- ctro[1]
