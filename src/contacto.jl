@@ -33,15 +33,41 @@ function Voxel(c::Array{Float64, 1}, hd::Float64, level::Int64)
 end
 
 mutable struct Cell
-    atoms::MVector{8, Int64}
-    vertices::MMatrix{3, 8, Float64}
-    siblings::MVector{8, Cell}
-    
+    atoms::Array{Int64, 1}
+    vertices::Array{Float64, 2}
 
     Cell() = new()
-    Cell(atoms, vertices, siblings) = new(atoms, vertices, siblings)
+
+    function Cell(atoms::Array{Int64, 1}, vertices::Array{Float64, 2})
+        if size(vertices) != (8, 3)
+            error("Wrong input box. Should be a 8x3 Array{Float64, 2}.")
+        end
+        new(atoms, vertices)
+    end
+    function Cell(vertices::Array{Float64, 2})
+        if size(vertices) != (8, 3)
+            error("Wrong input box. Should be a 8x3 Array{Float64, 2}.")
+        end
+        new(vertices)
+    end
 end
 
+mutable struct Cell_list
+    cells::Array{Cell, 3}
+    
+    Cell() = new()
+    
+    
+    function Cell_list(bbox::Array{Float64, 2})
+        
+        new(atoms, vertices)
+    end
+end
+
+function Cell_list(t_xyz::Array{Float64, 2})
+    
+    new(atoms, vertices)
+end
 # tmp_xyz = Array{Float64}(undef, natoms, 3)
 # tmp_xyz[:, 1] = t_xyz[:, 1] .- ctro[1]
 # tmp_xyz[:, 2] = t_xyz[:, 2] .- ctro[2]
