@@ -20,7 +20,7 @@ function Voxel(c::Array{Float64, 1}, hd::Float64, level::Int64)
         error("Dimension cannot be negative.")
     end
     if length(c) != 3
-        error("Center coordinates vector msut be of length 3.")
+        error("Center coordinates vector must be of length 3.")
     end
 
     vertices = hcat(
