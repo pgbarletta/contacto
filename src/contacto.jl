@@ -64,6 +64,14 @@ mutable struct node
     end
 end
 
+# function setup_node(X::node, range::UnitRange{Int}, n::Int,
+#     sorted_indices::Array{Int, 1}, xyz::Array{Float, 2})
+
+#     if range == 0:0
+
+#     end
+# end
+
 function Base.getindex(X::node, i::Int)
     i > X.n ? throw(BoundsError(X.n, i)) : return X.children[i]
 end
