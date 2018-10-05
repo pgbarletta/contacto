@@ -1,5 +1,6 @@
 module contacto
 using StaticArrays
+const AtomRange_t = UnitRange{Int64}
 
 mutable struct Voxel
     center::MVector{3, Float64}
@@ -36,7 +37,7 @@ mutable struct node
     children::Array{node, 1}
     n::Int64
     node_level::Int64
-    idx_range::UnitRange{Int64}
+    idx_range::AtomRange_t
     srt_idx::Array{Int64, 1}
     natoms::Int64
     xyz::Array{Float64, 2}
@@ -51,13 +52,13 @@ mutable struct node
         new(Array{node, 1}(undef, ncells), ncells, node_level)
     end
 
-    function node(ncells::Int64, node_level::Int64, idx_range::UnitRange{Int64},
+    function node(ncells::Int64, node_level::Int64, idx_range::AtomRange_t,
         srt_idx::Array{Int64, 1})
         new(Array{node, 1}(undef, ncells), ncells, node_level, idx_range, srt_idx,
         length(srt_idx))
     end
 
-    function node(ncells::Int64, node_level::Int64, idx_range::UnitRange{Int64},
+    function node(ncells::Int64, node_level::Int64, idx_range::AtomRange_t,
         srt_idx::Array{Int64, 1}, xyz::Array{Float64, 2})
         new(Array{node, 1}(undef, ncells), ncells, node_level, idx_range, srt_idx,
             length(srt_idx), xyz)
