@@ -1,196 +1,40 @@
-module contacto
-using StaticArrays
-const AtomRange_t = UnitRange{Int64}
-
-mutable struct Voxel
-    center::MVector{3, Float64}
-    vertices::MMatrix{3, 8, Float64}
-    half_dim::Float64
-    level::Int64
-    parent::Voxel
-    children::MVector{8, Voxel}
-    
-    Voxel() = new()
-    Voxel(c_xyz, vertices, half_dim, level, parent, childs_xyz) = 
-        new(c_xyz, vertices, half_dim, level, parent, childs_xyz)
-    
-end
-
-function Voxel(c::Array{Float64, 1}, hd::Float64, level::Int64)
-    if hd < 0
-        error("Dimension cannot be negative.")
+# Divide input atom coordinates in cubic cells of size `cutoff`.
+function cellify(cutoff::Float64, xyz::Array{Float64, 2})
+    if size(xyz)[2] != 3
+        error("Bad dimensions on input coordinates")
+    elseif !(1E-1 < cutoff < 1E10)
+        error("Bad input cutoff value")
     end
-    if length(c) != 3
-        error("Center coordinates vector must be of length 3.")
-    end
+    natoms = size(xyz)[1]
+    xyz_min = get_rounded_tops(xyz, minimum)
+    xyz_max = get_rounded_tops(xyz, maximum)
+    nnodes, nlevels = get_nnodes_nlevels(xyz_min, xyz_max, cutoff)
+    init_vox = get_cell_vtces(xyz_min, cutoff, nnodes)
+    nodes_ranges, nodes_bounds = get_bin_tree(nnodes, nlevels)
+    root = init_tree(nnodes, natoms, xyz)
 
-    vertices = hcat(
-        c .+ [ -hd ; -hd ; -hd ], c .+ [ -hd ; -hd ; hd ], 
-        c .+ [ -hd ; hd ; -hd ], c .+ [ -hd ; hd ; hd ], 
-        c .+ [ hd ; -hd ; -hd  ], c .+ [ hd ; -hd ; hd ],
-        c .+ [ hd ; hd ; -hd ], c .+ [ hd ; hd ; hd ])
+    x_tree = spread_indices_on_bin_tree(root.xyz[root.srt_idx, 1], nodes_ranges,
+        nodes_bounds, xyz_min[root.node_level], root.natoms, cutoff, nlevels)
+    for i = 1:root.nnodes
+        if setup_node!(root, root, root[i], x_tree[i], collect(1:natoms))
+            global srt_idx_y = sortperm(root[i].xyz[:, root[i].node_level])
+            global srt_y = root[i].xyz[srt_idx_y, root[i].node_level]
+            global y_tree = spread_indices_on_bin_tree(srt_y, nodes_ranges, nodes_bounds,
+                xyz_min[root[i].node_level], root[i].natoms, cutoff, nlevels)
 
-    Voxel(c, vertices, hd, level, Voxel(), MVector{8, Voxel}(fill(Voxel(), 8)))
-end
+            for j = 1:root.nnodes
+                if setup_node!(root, root[i], root[i][j], y_tree[j], srt_idx_y)
+                    global srt_idx_z = sortperm(root[i][j].xyz[:, root[i][j].node_level])
+                    global srt_z = root[i][j].xyz[srt_idx_z, root[i][j].node_level]
+                    global z_tree = spread_indices_on_bin_tree(srt_z, nodes_ranges, nodes_bounds,
+                        xyz_min[root[i][j].node_level], root[i][j].natoms, cutoff, nlevels)
 
-mutable struct node
-    children::Array{node, 1}
-    n::Int64
-    node_level::Int64
-    idx_range::AtomRange_t
-    srt_idx::Array{Int64, 1}
-    natoms::Int64
-    xyz::Array{Float64, 2}
-    
-    node() = new()
-
-    function node(ncells::Int64, node_level::Int64)
-        new(Array{node, 1}(undef, ncells), ncells, node_level, 0:0)
-    end
-
-    function node(ncells::Int64, node_level::Int64)
-        new(Array{node, 1}(undef, ncells), ncells, node_level)
-    end
-
-    function node(ncells::Int64, node_level::Int64, idx_range::AtomRange_t,
-        srt_idx::Array{Int64, 1})
-        new(Array{node, 1}(undef, ncells), ncells, node_level, idx_range, srt_idx,
-        length(srt_idx))
-    end
-
-    function node(ncells::Int64, node_level::Int64, idx_range::AtomRange_t,
-        srt_idx::Array{Int64, 1}, xyz::Array{Float64, 2})
-        new(Array{node, 1}(undef, ncells), ncells, node_level, idx_range, srt_idx,
-            length(srt_idx), xyz)
-    end
-end
-
-# function setup_node(X::node, range::UnitRange{Int}, n::Int,
-#     sorted_indices::Array{Int, 1}, xyz::Array{Float, 2})
-
-#     if range == 0:0
-
-#     end
-# end
-
-function Base.getindex(X::node, i::Int)
-    i > X.n ? throw(BoundsError(X.n, i)) : return X.children[i]
-end
-
-function Base.setindex!(X::node, v::node, i::Int)
-    i > X.n ? throw(BoundsError(X.n, i)) : X.children[i] = v
-end
-
-function Base.getindex(X::node, i::Int, j::Int)
-    if i <= X.n & j <= X.n
-        return X[i][j]
-    else
-        throw(BoundsError([X.n X.n], [i, j]))
-    end
-end
-
-function Base.setindex!(X::node, v::node, i::Int, j::Int)
-    if i <= X.n & j <= X.n
-        X.children[i][j] = v
-    else
-        throw(BoundsError([X.n X.n], [i, j]))
-    end
-end
-
-function Base.getindex(X::node, i::Int, j::Int, k::Int)
-    if i <= X.n & j <= X.n & k <= X.n
-        return X[i][j][k]
-    else
-        throw(BoundsError([X.n X.n X.n], [i, j, k]))
-    end
-end
-
-function Base.setindex!(X::node, v::node, i::Int, j::Int, k::Int)
-    if i <= X.n & j <= X.n & k <= X.n
-        X.children[i][j][k] = v
-    else
-        throw(BoundsError([X.n X.n X.n], [i, j, k]))
-    end
-end
-
-Base.first(X::node) = 1
-Base.last(X::node) = length(X.children)
-
-function Base.size(X::node)
-    return length(X.srt_idx)
-end
-
-# I probably shouldn't allow setindex!() as the user will likely
-# invalidate the rest of the tree
-mutable struct tree
-    root::node
-    ncells::Int64
-    
-    tree() = new()
-
-    tree(root, ncells) = new(root, ncells)
-    
-    function tree(ncells::Int64, natoms::Int64, xyz::Array{Float64, 2})
-        root = node(ncells, 0, 1:natoms, sortperm(xyz[:, 1]), xyz)
-        
-        for i = 1:ncells
-            root[i] = node(ncells, 1)
-            for j = 1:ncells
-                root[i][j] = node(ncells, 2)
-                for k = 1:ncells
-                    root[i][j][k] = node(0, 3)
+                    for k = 1:root.nnodes
+                        setup_node!(root, root[i][j], root[i][j][k], z_tree[k], srt_idx_z)  
+                    end
                 end
             end
-        end            
-        new(root, ncells)
+        end
     end
-    
-end
-
-function Base.getindex(X::tree, i::Int)
-    i > X.ncells ? throw(BoundsError(X.ncells, i)) : return X.root.children[i]
-end
-
-function Base.setindex!(X::tree, v::node, i::Int)
-    i > X.ncells ? throw(BoundsError(X.ncells, i)) : X.root.children[i] = v
-end
-
-function Base.getindex(X::tree, i::Int, j::Int)
-    if i <= X.ncells & j <= X.ncells
-        return X.root.children[i][j]
-    else
-        throw(BoundsError([X.ncells X.ncells], [i, j]))
-    end
-end
-
-function Base.setindex!(X::tree, v::node, i::Int, j::Int)
-    if i <= X.ncells & j <= X.ncells
-        X.root.children[i][j] = v
-    else
-        throw(BoundsError([X.ncells X.ncells], [i, j]))
-    end
-end
-
-function Base.getindex(X::tree, i::Int, j::Int, k::Int)
-    if i <= X.ncells & j <= X.ncells & k <= X.ncells
-        return X.root.children[i][j][k]
-    else
-        throw(BoundsError([X.ncells X.ncells X.ncells], [i, j, k]))
-    end
-end
-
-function Base.setindex!(X::tree, v::node, i::Int, j::Int, k::Int)
-    if i <= X.ncells & j <= X.ncells & k <= X.ncells
-        X.root.children[i][j][k] = v
-    else
-        throw(BoundsError([X.ncells X.ncells X.ncells], [i, j, k]))
-    end
-end
-
-Base.first(X::tree) = 1
-
-function Base.size(X::tree)
-    return X.ncells^3
-end
-
+   return root
 end
